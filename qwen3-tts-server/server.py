@@ -15,6 +15,7 @@ import io
 import logging
 import os
 import platform
+import time
 import re
 import wave
 from contextlib import asynccontextmanager
@@ -172,8 +173,8 @@ def _apply_optimizations(model):
         model.enable_streaming_optimizations(
             decode_window_frames=80,
             use_compile=True,
-            use_cuda_graphs=False,
-            compile_mode="default",
+            use_cuda_graphs=True,
+            compile_mode="reduce-overhead",
             use_fast_codebook=True,
             compile_codebook_predictor=True,
         )
@@ -184,24 +185,30 @@ def _apply_optimizations(model):
 
 def _warmup_model(model):
     """Run warmup generations to trigger torch.compile compilation."""
-    logger.info("Running warmup generation (triggers compilation)...")
+    logger.info("Running warmup generation (triggers torch.compile — this may take 30-120s)...")
     try:
         speaker = model.get_supported_speakers()[0]
         # Batch warmup
+        t0 = time.monotonic()
         model.generate_custom_voice(
             text="Warmup.",
             language="English",
             speaker=speaker,
         )
+        t1 = time.monotonic()
+        logger.info("Batch warmup done in %.1fs (includes torch.compile)", t1 - t0)
         # Streaming warmup (consume the generator to trigger compile on streaming path)
         if platform.system() != "Windows" and hasattr(model, "stream_generate_custom_voice"):
+            t2 = time.monotonic()
             for _ in model.stream_generate_custom_voice(
                 text="Warmup.",
                 language="English",
                 speaker=speaker,
             ):
                 pass
-        logger.info("Warmup complete")
+            t3 = time.monotonic()
+            logger.info("Streaming warmup done in %.1fs", t3 - t2)
+        logger.info("Warmup complete — total %.1fs", time.monotonic() - t0)
     except Exception as e:
         logger.warning("Warmup failed (non-fatal): %s", e)
 
