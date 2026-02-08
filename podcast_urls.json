@@ -1,0 +1,21 @@
+{
+  "podcasts": [
+    {"url": "https://www.youtube.com/watch?v=xHvRbztJFwQ", "speaker": "maryam"},
+    {"url": "https://www.youtube.com/watch?v=yB2ERb1YbME", "speaker": "maryam"},
+    {"url": "https://www.youtube.com/watch?v=JSxPH1h6hcc", "speaker": "maryam"},
+    {"url": "https://www.youtube.com/watch?v=Rin2kAcp5jw", "speaker": "maryam"},
+    {"url": "https://www.youtube.com/watch?v=9b-imCM04Yg", "speaker": "maryam"},
+    {"url": "https://www.youtube.com/watch?v=qYGUeqLPlm0", "speaker": "maryam"},
+    {"url": "https://www.youtube.com/watch?v=mVAG3kjtrzo", "speaker": "maryam"},
+    {"url": "https://www.youtube.com/watch?v=rOEie8JCd0o", "speaker": "maryam"},
+    {"url": "https://www.youtube.com/watch?v=JimxXdswr64", "speaker": "maryam"}
+  ],
+  "settings": {
+    "min_silence_ms": 800,
+    "silence_thresh_db": -40,
+    "min_segment_sec": 2.0,
+    "max_segment_sec": 15.0,
+    "silence_padding_ms": 150,
+    "fade_ms": 30
+  }
+}

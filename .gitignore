@@ -1,0 +1,47 @@
+# Binary audio artifacts
+*.wav
+*.pcm
+*.mp3
+*.flac
+
+# Training data
+*.jsonl
+training_data/
+thalya/
+maryam/
+transcripts.txt
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Build/install artifacts
+sox.zip
+sox_install/
+
+# Test output & logs
+test_results/
+logs/
+
+# IDE / editor
+.vscode/
+.idea/
+
+# OS
+nul
+Thumbs.db
+.DS_Store
+
+# Misc output dirs
+output_final/
+output_lowlr/
+output_olddata/
+output_stripped/
+
+# Old proof of concept (superseded)
+streaming-poc/
+
+# Upstream repos (handled as submodules)
+qwen3-tts-repo/
+qwen3-tts-streaming-ref/

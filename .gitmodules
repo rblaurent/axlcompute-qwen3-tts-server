@@ -1,0 +1,6 @@
+[submodule "qwen3-tts-repo"]
+	path = qwen3-tts-repo
+	url = https://github.com/QwenLM/Qwen3-TTS.git
+[submodule "qwen3-tts-streaming-ref"]
+	path = qwen3-tts-streaming-ref
+	url = https://github.com/rekuenkdr/Qwen3-TTS-streaming.git
