@@ -82,6 +82,7 @@ NEW_METHOD = '''\
         gen_kwargs = self._merge_generate_kwargs(**kwargs)
         supported_params = {
             "do_sample", "top_k", "top_p", "temperature",
+            "repetition_penalty",
             "subtalker_dosample", "subtalker_top_k", "subtalker_top_p", "subtalker_temperature",
         }
         gen_kwargs = {k: v for k, v in gen_kwargs.items() if k in supported_params}
