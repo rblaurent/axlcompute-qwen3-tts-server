@@ -15,6 +15,7 @@ import io
 import logging
 import os
 import platform
+import struct
 import time
 import re
 import wave
@@ -84,6 +85,8 @@ class SynthesizeRequest(BaseModel):
     subtalker_temperature: Optional[float] = None
     subtalker_top_k: Optional[int] = None
     subtalker_top_p: Optional[float] = None
+    # Adaptive pre-buffering: when true, wrap audio chunks in frames with RTF metadata
+    adaptive_buffer: bool = False
 
 
 class ReloadRequest(BaseModel):
@@ -556,17 +559,41 @@ async def synthesize_stream(request: SynthesizeRequest):
                 logger.exception("[Stream] Error during streaming: %s", e)
                 raise
 
+    # Wrap in framed stream with RTF metadata when adaptive_buffer is requested
+    response_headers = {
+        "X-Audio-Sample-Rate": "24000",
+        "X-Audio-Channels": "1",
+        "X-Audio-Format": "s16le",
+        "X-Streaming": "true",
+        "Cache-Control": "no-cache",
+        "Transfer-Encoding": "chunked",
+    }
+
+    if request.adaptive_buffer:
+        raw_gen = audio_stream()
+
+        async def framed_stream():
+            start_time = time.monotonic()
+            total_audio_samples = 0
+            async for pcm_bytes in raw_gen:
+                total_audio_samples += len(pcm_bytes) // 2  # 16-bit samples
+                audio_duration = total_audio_samples / 24000.0
+                elapsed = time.monotonic() - start_time
+                rtf = elapsed / audio_duration if audio_duration > 0 else 0.0
+                # Frame: [uint32 pcm_data_length][float32 cumulative_rtf][pcm_data]
+                header = struct.pack('<If', len(pcm_bytes), rtf)
+                yield header + pcm_bytes
+
+        response_gen = framed_stream()
+        response_headers["X-Framed"] = "true"
+        logger.info("[Stream] Adaptive buffer enabled, using framed streaming")
+    else:
+        response_gen = audio_stream()
+
     return StreamingResponse(
-        audio_stream(),
+        response_gen,
         media_type="audio/pcm",
-        headers={
-            "X-Audio-Sample-Rate": "24000",
-            "X-Audio-Channels": "1",
-            "X-Audio-Format": "s16le",
-            "X-Streaming": "true",
-            "Cache-Control": "no-cache",
-            "Transfer-Encoding": "chunked",
-        }
+        headers=response_headers
     )
 
 
