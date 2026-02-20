@@ -26,6 +26,8 @@ PORT="${PORT:-8765}"
 
 # Persist HuggingFace cache on volume so models survive restarts
 export HF_HOME=$WORKSPACE/hf_cache
+# Disable hf_transfer (RunPod template enables it but package isn't installed)
+export HF_HUB_ENABLE_HF_TRANSFER=0
 
 echo "=== Qwen3-TTS RunPod Startup ==="
 echo "Model: $MODEL_NAME"
@@ -40,6 +42,10 @@ if [ ! -f "$SETUP_MARKER" ]; then
     echo "[1/4] Creating venv at $VENV_DIR..."
     python -m venv --system-site-packages "$VENV_DIR"
     source "$VENV_DIR/bin/activate"
+
+    # Install SoX (required by qwen-tts for audio processing)
+    echo "[1.5/4] Installing SoX..."
+    apt-get update -qq && apt-get install -y -qq sox libsox-dev > /dev/null 2>&1
 
     # Install dependencies
     echo "[2/4] Installing Python dependencies..."
