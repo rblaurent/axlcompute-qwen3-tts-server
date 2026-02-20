@@ -256,6 +256,9 @@ def audio_to_wav_bytes(audio_array: np.ndarray, sample_rate: int = 24000) -> byt
 
 def audio_to_pcm_bytes(audio_array: np.ndarray) -> bytes:
     """Convert audio numpy array to raw PCM bytes (16-bit mono)."""
+    if audio_array.size == 0:
+        return b""
+
     # Ensure float32
     audio = audio_array.astype(np.float32)
 
