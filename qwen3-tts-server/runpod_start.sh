@@ -50,7 +50,7 @@ if [ ! -f "$SETUP_MARKER" ]; then
     # Install dependencies (use streaming fork for stream_generate_custom_voice support)
     echo "[2/4] Installing Python dependencies..."
     pip install --no-cache-dir \
-        "transformers>=4.57.3" \
+        "transformers>=4.57.3,<5.0.0" \
         "qwen-tts @ git+https://github.com/rblaurent/axl-compute-qwen3-tts-streaming.git" \
         "fastapi>=0.100.0" \
         "uvicorn[standard]>=0.22.0" \
