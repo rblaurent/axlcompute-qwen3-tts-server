@@ -2,13 +2,19 @@
 import sys
 import importlib.util
 
-# Auto-detect the installed package location
-spec = importlib.util.find_spec("qwen_tts.inference.qwen3_tts_model")
-if spec is None or spec.origin is None:
-    print("ERROR: Could not find qwen_tts.inference.qwen3_tts_model package")
+# Auto-detect the installed package location (use origin_only to avoid importing the module)
+spec = importlib.util.find_spec("qwen_tts")
+if spec is None or spec.submodule_search_locations is None:
+    print("ERROR: Could not find qwen_tts package")
     sys.exit(1)
 
-FILE = spec.origin
+import os
+pkg_dir = spec.submodule_search_locations[0]
+FILE = os.path.join(pkg_dir, "inference", "qwen3_tts_model.py")
+if not os.path.exists(FILE):
+    print(f"ERROR: Expected file not found: {FILE}")
+    sys.exit(1)
+
 print(f"Found model file at: {FILE}")
 
 with open(FILE, "r") as f:
@@ -23,6 +29,11 @@ if "stream_generate_custom_voice" in content:
 if MARKER not in content:
     print(f"ERROR: Could not find insertion marker in {FILE}")
     sys.exit(1)
+
+# Ensure Generator and Tuple are imported
+if "from typing import" in content and "Generator" not in content:
+    content = content.replace("from typing import ", "from typing import Generator, Tuple, ", 1)
+    print("Added Generator, Tuple to typing imports")
 
 NEW_METHOD = '''\
     # custom voice model - streaming
