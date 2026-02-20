@@ -79,5 +79,16 @@ fi
 source "$VENV_DIR/bin/activate"
 
 cd "$SERVER_DIR"
+
+# Install SoX on every boot (apt packages don't persist across restarts)
+if ! command -v sox &> /dev/null; then
+    echo "Installing SoX..."
+    apt-get update -qq && apt-get install -y -qq sox libsox-dev > /dev/null 2>&1
+fi
+
+# Apply streaming patch (idempotent - skips if already patched)
+echo "Applying streaming patch..."
+python patch_stream_custom_voice.py
+
 echo "Starting server on 0.0.0.0:$PORT..."
 exec python -m uvicorn server:app --host 0.0.0.0 --port "$PORT"
