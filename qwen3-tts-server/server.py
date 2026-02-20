@@ -497,23 +497,19 @@ async def synthesize_stream(request: SynthesizeRequest):
 
     logger.info("[Stream] Speaker: %s, Language: %s", request.speaker, request.language)
 
-    use_fork_streaming = (
-        platform.system() != "Windows"
-        and hasattr(model, "stream_generate_custom_voice")
+    config = StreamingConfig(
+        packet_size=4,
     )
+    generator = StreamingTTSGenerator(model, config)
 
-    if use_fork_streaming:
-        async def audio_stream():
-            """Async generator using fork's optimized streaming."""
-            loop = asyncio.get_event_loop()
-            gen = model.stream_generate_custom_voice(
+    async def audio_stream():
+        """Async generator using StreamingTTSGenerator with codec_callback."""
+        try:
+            async for audio_bytes in generator.generate_streaming(
                 text=clean_text,
                 speaker=request.speaker,
                 language=request.language,
                 instruct=instruct if instruct else None,
-                emit_every_frames=12,
-                decode_window_frames=80,
-                use_optimized_decode=False,
                 temperature=request.temperature,
                 top_k=request.top_k,
                 top_p=request.top_p,
@@ -521,52 +517,11 @@ async def synthesize_stream(request: SynthesizeRequest):
                 subtalker_temperature=request.subtalker_temperature,
                 subtalker_top_k=request.subtalker_top_k,
                 subtalker_top_p=request.subtalker_top_p,
-            )
-            packet_count = 0
-            try:
-                while True:
-                    result = await loop.run_in_executor(None, next, gen, None)
-                    if result is None:
-                        break
-                    audio_chunk, sr = result
-                    logger.debug("[Stream] Chunk %d: shape=%s, size=%d", packet_count, audio_chunk.shape, audio_chunk.size)
-                    pcm = audio_to_pcm_bytes(audio_chunk)
-                    if pcm:
-                        packet_count += 1
-                        yield pcm
-            except StopIteration:
-                pass
-            except Exception as e:
-                logger.exception("[Stream] Error during streaming: %s", e)
-                raise
-            logger.info("[Stream] Fork streaming complete: %d packets", packet_count)
-    else:
-        # Windows fallback: use old StreamingTTSGenerator with codec_callback
-        config = StreamingConfig(
-            packet_size=4,
-        )
-        generator = StreamingTTSGenerator(model, config)
-
-        async def audio_stream():
-            """Async generator using old codec_callback streaming."""
-            try:
-                async for audio_bytes in generator.generate_streaming(
-                    text=clean_text,
-                    speaker=request.speaker,
-                    language=request.language,
-                    instruct=instruct if instruct else None,
-                    temperature=request.temperature,
-                    top_k=request.top_k,
-                    top_p=request.top_p,
-                    repetition_penalty=request.repetition_penalty,
-                    subtalker_temperature=request.subtalker_temperature,
-                    subtalker_top_k=request.subtalker_top_k,
-                    subtalker_top_p=request.subtalker_top_p,
-                ):
-                    yield audio_bytes
-            except Exception as e:
-                logger.exception("[Stream] Error during streaming: %s", e)
-                raise
+            ):
+                yield audio_bytes
+        except Exception as e:
+            logger.exception("[Stream] Error during streaming: %s", e)
+            raise
 
     # Wrap in framed stream with RTF metadata when adaptive_buffer is requested
     response_headers = {
