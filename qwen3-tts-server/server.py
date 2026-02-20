@@ -651,8 +651,12 @@ async def reload_model(request: ReloadRequest):
             detail="checkpoint_path is required"
         )
 
-    # Check if path exists
-    if not os.path.exists(checkpoint_path):
+    # Determine if this is a HuggingFace model ID (e.g., "rblaurent/qwen3-tts-springs")
+    # vs a local filesystem path. HF IDs contain "/" but no OS path separators like "\" or start with "/".
+    is_hf_model = "/" in checkpoint_path and not os.path.isabs(checkpoint_path) and "\\" not in checkpoint_path
+
+    # Check if local path exists (skip for HF model IDs — they'll be downloaded by from_pretrained)
+    if not is_hf_model and not os.path.exists(checkpoint_path):
         raise HTTPException(
             status_code=400,
             detail=f"Checkpoint path does not exist: {checkpoint_path}"
@@ -738,5 +742,6 @@ async def model_info():
 
 if __name__ == "__main__":
     import uvicorn
+    host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", 8765))
-    uvicorn.run(app, host="127.0.0.1", port=port)
+    uvicorn.run(app, host=host, port=port)

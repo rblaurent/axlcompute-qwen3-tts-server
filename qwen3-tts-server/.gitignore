@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.wav
+*.pcm
+logs/
+test_*.py
+debug_*.py
+check_*.py
+patch_*.py
+streaming_generator_v*.py
