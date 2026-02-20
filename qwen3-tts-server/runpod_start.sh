@@ -47,10 +47,10 @@ if [ ! -f "$SETUP_MARKER" ]; then
     echo "[1.5/4] Installing SoX..."
     apt-get update -qq && apt-get install -y -qq sox libsox-dev > /dev/null 2>&1
 
-    # Install dependencies
+    # Install dependencies (use streaming fork for stream_generate_custom_voice support)
     echo "[2/4] Installing Python dependencies..."
     pip install --no-cache-dir \
-        "qwen-tts>=0.0.5" \
+        "qwen-tts @ git+https://github.com/rekuenkdr/Qwen3-TTS-streaming.git" \
         "fastapi>=0.100.0" \
         "uvicorn[standard]>=0.22.0" \
         "numpy>=1.24.0" \
@@ -85,10 +85,6 @@ if ! command -v sox &> /dev/null; then
     echo "Installing SoX..."
     apt-get update -qq && apt-get install -y -qq sox libsox-dev > /dev/null 2>&1
 fi
-
-# Apply streaming patch (idempotent - skips if already patched)
-echo "Applying streaming patch..."
-python patch_stream_custom_voice.py
 
 echo "Starting server on 0.0.0.0:$PORT..."
 exec python -m uvicorn server:app --host 0.0.0.0 --port "$PORT"
