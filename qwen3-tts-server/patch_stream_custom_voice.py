@@ -1,7 +1,15 @@
 """Patch the installed fork to add stream_generate_custom_voice() method."""
 import sys
+import importlib.util
 
-FILE = "/home/laurent/qwen3-tts-streaming/qwen_tts/inference/qwen3_tts_model.py"
+# Auto-detect the installed package location
+spec = importlib.util.find_spec("qwen_tts.inference.qwen3_tts_model")
+if spec is None or spec.origin is None:
+    print("ERROR: Could not find qwen_tts.inference.qwen3_tts_model package")
+    sys.exit(1)
+
+FILE = spec.origin
+print(f"Found model file at: {FILE}")
 
 with open(FILE, "r") as f:
     content = f.read()
