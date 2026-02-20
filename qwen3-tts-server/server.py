@@ -522,18 +522,24 @@ async def synthesize_stream(request: SynthesizeRequest):
                 subtalker_top_k=request.subtalker_top_k,
                 subtalker_top_p=request.subtalker_top_p,
             )
+            packet_count = 0
             try:
                 while True:
                     result = await loop.run_in_executor(None, next, gen, None)
                     if result is None:
                         break
                     audio_chunk, sr = result
-                    yield audio_to_pcm_bytes(audio_chunk)
+                    logger.debug("[Stream] Chunk %d: shape=%s, size=%d", packet_count, audio_chunk.shape, audio_chunk.size)
+                    pcm = audio_to_pcm_bytes(audio_chunk)
+                    if pcm:
+                        packet_count += 1
+                        yield pcm
             except StopIteration:
                 pass
             except Exception as e:
                 logger.exception("[Stream] Error during streaming: %s", e)
                 raise
+            logger.info("[Stream] Fork streaming complete: %d packets", packet_count)
     else:
         # Windows fallback: use old StreamingTTSGenerator with codec_callback
         config = StreamingConfig(
