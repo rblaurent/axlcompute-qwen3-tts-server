@@ -14,6 +14,7 @@ import gc
 import io
 import logging
 import os
+import threading
 import platform
 import struct
 import time
@@ -176,8 +177,8 @@ def _apply_optimizations(model):
         model.enable_streaming_optimizations(
             decode_window_frames=80,
             use_compile=True,
-            use_cuda_graphs=True,
-            compile_mode="reduce-overhead",
+            use_cuda_graphs=False,
+            compile_mode="default",
             use_fast_codebook=True,
             compile_codebook_predictor=True,
         )
@@ -259,15 +260,10 @@ def audio_to_pcm_bytes(audio_array: np.ndarray) -> bytes:
     if audio_array.size == 0:
         return b""
 
-    # Ensure float32
     audio = audio_array.astype(np.float32)
-
-    # Normalize to [-1, 1] range if needed
-    max_val = max(abs(audio.max()), abs(audio.min()))
-    if max_val > 1.0:
-        audio = audio / max_val
-
-    # Convert to 16-bit PCM
+    # Clip to [-1, 1] instead of normalizing per-chunk.
+    # Per-chunk normalization causes amplitude jumps between chunks.
+    audio = np.clip(audio, -1.0, 1.0)
     audio_int16 = (audio * 32767).astype(np.int16)
     return audio_int16.tobytes()
 
@@ -497,31 +493,83 @@ async def synthesize_stream(request: SynthesizeRequest):
 
     logger.info("[Stream] Speaker: %s, Language: %s", request.speaker, request.language)
 
-    config = StreamingConfig(
-        packet_size=4,
-    )
-    generator = StreamingTTSGenerator(model, config)
+    if hasattr(model, "stream_generate_custom_voice"):
+        # Custom voice checkpoint (e.g. springs) — use stream_generate_custom_voice.
+        # StreamingTTSGenerator uses codec_callback which only fires on base model generation,
+        # not on the custom voice path, so it yields nothing.
+        logger.info("[Stream] Using custom voice streaming path")
+        loop = asyncio.get_event_loop()
+        queue: asyncio.Queue = asyncio.Queue()
 
-    async def audio_stream():
-        """Async generator using StreamingTTSGenerator with codec_callback."""
-        try:
-            async for audio_bytes in generator.generate_streaming(
-                text=clean_text,
-                speaker=request.speaker,
-                language=request.language,
-                instruct=instruct if instruct else None,
-                temperature=request.temperature,
-                top_k=request.top_k,
-                top_p=request.top_p,
-                repetition_penalty=request.repetition_penalty,
-                subtalker_temperature=request.subtalker_temperature,
-                subtalker_top_k=request.subtalker_top_k,
-                subtalker_top_p=request.subtalker_top_p,
-            ):
-                yield audio_bytes
-        except Exception as e:
-            logger.exception("[Stream] Error during streaming: %s", e)
-            raise
+        def _run_custom_voice():
+            is_first_chunk = True
+            try:
+                for chunk, sr in model.stream_generate_custom_voice(
+                    text=clean_text,
+                    speaker=request.speaker,
+                    language=request.language,
+                    instruct=instruct if instruct else None,
+                    emit_every_frames=16,
+                    overlap_samples=512,
+                    temperature=request.temperature,
+                    top_k=request.top_k,
+                    top_p=request.top_p,
+                    repetition_penalty=request.repetition_penalty,
+                    subtalker_temperature=request.subtalker_temperature,
+                    subtalker_top_k=request.subtalker_top_k,
+                    subtalker_top_p=request.subtalker_top_p,
+                ):
+                    if is_first_chunk:
+                        # Trim decoder cold-start transient (~50ms) and apply Hann fade-in (~20ms)
+                        trim = min(1200, len(chunk) // 4)
+                        chunk = chunk[trim:]
+                        fade_len = min(480, len(chunk))
+                        t = np.arange(fade_len, dtype=np.float32) / max(fade_len - 1, 1)
+                        chunk = chunk.copy()
+                        chunk[:fade_len] *= 0.5 * (1 - np.cos(np.pi * t))
+                        is_first_chunk = False
+                    pcm = audio_to_pcm_bytes(chunk)
+                    if pcm:
+                        loop.call_soon_threadsafe(queue.put_nowait, pcm)
+            except Exception as e:
+                logger.exception("[Stream] Custom voice streaming error: %s", e)
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        gen_thread = threading.Thread(target=_run_custom_voice, daemon=True)
+        gen_thread.start()
+
+        async def audio_stream():
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield item
+            gen_thread.join(timeout=5.0)
+    else:
+        config = StreamingConfig(packet_size=4)
+        generator = StreamingTTSGenerator(model, config)
+
+        async def audio_stream():
+            """Async generator using StreamingTTSGenerator with codec_callback."""
+            try:
+                async for audio_bytes in generator.generate_streaming(
+                    text=clean_text,
+                    speaker=request.speaker,
+                    language=request.language,
+                    instruct=instruct if instruct else None,
+                    temperature=request.temperature,
+                    top_k=request.top_k,
+                    top_p=request.top_p,
+                    repetition_penalty=request.repetition_penalty,
+                    subtalker_temperature=request.subtalker_temperature,
+                    subtalker_top_k=request.subtalker_top_k,
+                    subtalker_top_p=request.subtalker_top_p,
+                ):
+                    yield audio_bytes
+            except Exception as e:
+                logger.exception("[Stream] Error during streaming: %s", e)
+                raise
 
     # Wrap in framed stream with RTF metadata when adaptive_buffer is requested
     response_headers = {
