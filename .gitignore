@@ -42,6 +42,13 @@ output_stripped/
 # Old proof of concept (superseded)
 streaming-poc/
 
+# Extracted audio data (large)
+bl_tps_french_voices/
+springs/
+
+# Vendored audio tools (vgmstream)
+tools/
+
 # Upstream repos (handled as submodules)
 qwen3-tts-repo/
 qwen3-tts-streaming-ref/
